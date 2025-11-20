@@ -1,4 +1,4 @@
-
+{
   "name": "something",
   "version": "1.0.0",
   "main": "index.js",
@@ -11,3 +11,4 @@
     "mongodb": "^7.0.0",
     "multer": "^2.0.2"
   }
+}
