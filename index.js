@@ -6,7 +6,10 @@ const express = require("express");
 const path = require("path");
 const { MongoClient, ObjectId } = require("mongodb");
 
-const app = express();
+app.use(express.static(path.join(__dirname, 'Public')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'Public', 'index.html'));
+});
 
 // ---- ENV ----
 const uri = process.env.MONGODB_URI;
