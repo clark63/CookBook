@@ -2,12 +2,20 @@
 
 require("dotenv").config({ path: "./connect.env" });
 
-const app = express();
-const express = require("express");
-const path = require("path");
-const { MongoClient, ObjectId } = require("mongodb");
+const express = require('express');
+const path = require('path');
+const dotenv = require('dotenv');
+// etc... your other requires
 
+dotenv.config();
+
+// MUST come before any app.use()
+const app = express();
+
+// Now it's safe to serve static files
 app.use(express.static(path.join(__dirname, 'Public')));
+
+// Home route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'Public', 'index.html'));
 });
