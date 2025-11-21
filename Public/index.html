@@ -70,11 +70,12 @@
         z-index: 1;
       }
 
-      . {
+      .title {
         font-weight: 1000;
         font-size: 50px;
         letter-spacing: 0.4em;
         text-transform: uppercase;
+        colour: #053866;
       }
 
       .sub {
@@ -324,15 +325,11 @@
 
       /* little notebook glow in top-right corner */
       .recipe-item::before {
-        content: "";
-        position: absolute;
-        top: -18px;
-        right: -18px;
-        width: 64px;
-        height: 64px;
-        background: radial-gradient(circle at 0 0, #f0d2a0 0, transparent 65%);
-        opacity: 0.75;
-      }
+  background: radial-gradient(circle, rgba(0,0,0,0.04) 0, transparent 70%);
+  opacity: 0.3;
+  top: -10px;
+  right: -10px;
+}
 
       .recipe-header-row {
         display: flex;
@@ -409,7 +406,7 @@
 
       .recipe-title {
   font-family: "Patrick Hand SC", system-ui, sans-serif;
-  font-size: 20px;
+  font-size: 30px;
   font-weight: 400;
   margin-bottom: 2px;
   letter-spacing: 0.04em;
