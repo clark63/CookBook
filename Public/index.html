@@ -4,17 +4,24 @@
     <meta charset="UTF-8" />
     <title>Community Cookbook</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Handwritten + body fonts -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Patrick+Hand+SC&family=Source+Sans+3:wght@400;600;700&display=swap"
+    />
+
     <style>
       :root {
-        /* Warm, cookbook-ish palette */
-        --bg: #f6f1e8;
-        --panel: #fffaf2;
-        --accent: #d97757; /* cinnamon */
-        --accent-2: #a3b18a; /* sage */
-        --accent-3: #e9c46a; /* golden */
-        --border: rgba(177, 143, 108, 0.7);
-        --text: #3f2f25;
-        --muted: #8b6f52;
+        /* Warm paper + ink blue */
+        --bg: #f7f2e9;
+        --panel: #fffdf6;
+        --accent: #4c6a92; /* inky blue */
+        --accent-2: #d0a977; /* tan */
+        --accent-3: #9fb4c7; /* soft blue */
+        --border: rgba(160, 132, 96, 0.7);
+        --text: #3f3329;
+        --muted: #8c7257;
       }
 
       * {
@@ -23,14 +30,14 @@
 
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-          sans-serif;
+        font-family: "Source Sans 3", system-ui, -apple-system, BlinkMacSystemFont,
+          "SF Pro Text", sans-serif;
         min-height: 100vh;
         color: var(--text);
         background:
-          radial-gradient(circle at 0% 0%, #fde4c6 0, transparent 55%),
-          radial-gradient(circle at 100% 0%, #f8edc6 0, transparent 55%),
-          radial-gradient(circle at 100% 100%, #f3d7c4 0, transparent 55%),
+          radial-gradient(circle at 0% 0%, rgba(159, 180, 199, 0.35) 0, transparent 55%),
+          radial-gradient(circle at 100% 0%, rgba(240, 210, 160, 0.45) 0, transparent 55%),
+          radial-gradient(circle at 100% 100%, rgba(191, 187, 176, 0.4) 0, transparent 55%),
           var(--bg);
       }
 
@@ -42,16 +49,16 @@
         position: relative;
       }
 
-      /* Soft highlight under title instead of neon bar */
+      /* soft blurred band like a printed cover */
       header::before {
         content: "";
         position: absolute;
         inset: auto 140px 4px 24px;
-        height: 8px;
+        height: 10px;
         border-radius: 999px;
-        background: linear-gradient(90deg, #f4cf9c, #f1e0b5, #d4e3c4);
-        opacity: 0.7;
-        filter: blur(4px);
+        background: linear-gradient(90deg, #c0cde0, #f0d2a0, #c5d7e6);
+        opacity: 0.75;
+        filter: blur(6px);
         pointer-events: none;
       }
 
@@ -90,7 +97,7 @@
         padding: 4px 10px;
         border-radius: 999px;
         background: #fffaf0;
-        border: 1px solid rgba(177, 143, 108, 0.5);
+        border: 1px solid rgba(160, 132, 96, 0.5);
       }
 
       .dot {
@@ -116,21 +123,21 @@
         border-radius: 24px;
         padding: 20px 22px 24px;
         background: var(--panel);
-        border: 1px solid rgba(177, 143, 108, 0.4);
+        border: 1px solid rgba(160, 132, 96, 0.35);
         box-shadow:
-          0 16px 40px rgba(63, 47, 37, 0.12),
-          0 0 0 0.5px rgba(255, 255, 255, 0.8);
+          0 16px 40px rgba(63, 51, 41, 0.08),
+          0 0 0 0.5px rgba(255, 255, 255, 0.9);
         position: relative;
         overflow: hidden;
       }
 
-      /* Top “chapter” ribbon on each panel */
+      /* “chapter ribbon” */
       .panel::before {
         content: "";
         position: absolute;
         inset: 0 0 auto;
         height: 4px;
-        background: linear-gradient(90deg, #d97757, #e9c46a, #a3b18a);
+        background: linear-gradient(90deg, #4c6a92, #f0d2a0, #9fb4c7);
         opacity: 0.9;
       }
 
@@ -154,21 +161,21 @@
       .chip {
         padding: 3px 8px;
         border-radius: 999px;
-        border: 1px solid rgba(177, 143, 108, 0.5);
+        border: 1px solid rgba(160, 132, 96, 0.5);
         background: #fdf7ec;
         color: #7c5a3a;
       }
 
       .chip-peach {
-        border-color: rgba(217, 119, 87, 0.7);
-        background: #fff0e3;
-        color: #9b3419;
+        border-color: rgba(208, 169, 119, 0.8);
+        background: #fff3de;
+        color: #8a4b11;
       }
 
       .chip-fun {
-        border-color: rgba(163, 177, 138, 0.9);
-        background: #f3f6ea;
-        color: #4b5b35;
+        border-color: rgba(159, 180, 199, 0.9);
+        background: #eff3fa;
+        color: #3f5877;
       }
 
       form#recipe-form {
@@ -197,7 +204,7 @@
         width: 100%;
         padding: 9px 11px;
         border-radius: 12px;
-        border: 1px solid rgba(177, 143, 108, 0.65);
+        border: 1px solid rgba(160, 132, 96, 0.6);
         background: #fdf7ec;
         color: var(--text);
         font-size: 13px;
@@ -208,7 +215,7 @@
 
       input[type="text"]::placeholder,
       textarea::placeholder {
-        color: rgba(177, 143, 108, 0.8);
+        color: rgba(160, 132, 96, 0.8);
       }
 
       input[type="text"]:focus,
@@ -216,7 +223,7 @@
       select:focus {
         outline: none;
         border-color: var(--accent);
-        box-shadow: 0 0 0 1px rgba(217, 119, 87, 0.45);
+        box-shadow: 0 0 0 1px rgba(76, 106, 146, 0.45);
         background: #fffdf7;
       }
 
@@ -229,14 +236,14 @@
         padding: 9px 20px;
         border-radius: 999px;
         border: none;
-        background: linear-gradient(135deg, #d97757, #e9c46a);
-        color: #3f2f25;
+        background: linear-gradient(135deg, #4c6a92, #9fb4c7);
+        color: #fdf7ec;
         font-weight: 700;
         font-size: 12px;
         letter-spacing: 0.16em;
         text-transform: uppercase;
         cursor: pointer;
-        box-shadow: 0 14px 30px rgba(217, 119, 87, 0.45);
+        box-shadow: 0 14px 30px rgba(76, 106, 146, 0.35);
       }
 
       .btn-primary:hover {
@@ -275,33 +282,31 @@
       .recipes-outer {
         margin-top: 6px;
         border-radius: 18px;
-        border: 1px solid rgba(177, 143, 108, 0.5);
+        border: 1px solid rgba(160, 132, 96, 0.5);
         background: #fdf7ec;
         padding: 8px 10px;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+        position: relative;
       }
 
-      /* Cookbook-style stack of cards, scrolls inside box */
+      /* soft blur “glow” behind cards */
+      .recipes-outer::before {
+        content: "";
+        position: absolute;
+        inset: 18% 10% 25% 55%;
+        background: radial-gradient(circle at 50% 50%, #e8f0ff 0, transparent 70%);
+        opacity: 0.75;
+        pointer-events: none;
+      }
+
+      /* STACK WITH PAGE SCROLL (no inner scroll now) */
       .recipes-container {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        padding-right: 6px;
-        max-height: 440px;
-        overflow-y: auto;
-      }
-
-      /* softer scrollbar for the recipe box */
-      .recipes-container::-webkit-scrollbar {
-        width: 6px;
-      }
-      .recipes-container::-webkit-scrollbar-track {
-        background: #f3e7d4;
-        border-radius: 999px;
-      }
-      .recipes-container::-webkit-scrollbar-thumb {
-        background: #d1b08a;
-        border-radius: 999px;
+        padding-right: 2px;
+        position: relative;
+        z-index: 1;
       }
 
       .recipe-item {
@@ -309,21 +314,21 @@
         border: 1px solid rgba(194, 163, 128, 0.8);
         padding: 14px 16px 12px;
         background: #fffdf7;
-        box-shadow: 0 10px 24px rgba(143, 104, 68, 0.18);
+        box-shadow: 0 10px 24px rgba(143, 104, 68, 0.16);
         position: relative;
         overflow: hidden;
       }
 
-      /* Little “notebook corner” flourish */
+      /* little notebook glow in top-right corner */
       .recipe-item::before {
         content: "";
         position: absolute;
         top: -18px;
         right: -18px;
-        width: 60px;
-        height: 60px;
-        background: radial-gradient(circle at 0 0, #f7e0c4 0, transparent 60%);
-        opacity: 0.7;
+        width: 64px;
+        height: 64px;
+        background: radial-gradient(circle at 0 0, #f0d2a0 0, transparent 65%);
+        opacity: 0.75;
       }
 
       .recipe-header-row {
@@ -333,10 +338,13 @@
         gap: 8px;
       }
 
+      /* handwritten title but still readable */
       .recipe-title {
-        font-weight: 700;
+        font-family: "Patrick Hand SC", system-ui, sans-serif;
+        font-size: 18px;
+        font-weight: 400;
         margin-bottom: 2px;
-        font-size: 16px;
+        letter-spacing: 0.04em;
       }
 
       .recipe-meta {
@@ -350,20 +358,20 @@
         padding: 3px 9px;
         border-radius: 999px;
         background: #fff3d6;
-        color: #9a5a0f;
-        border: 1px solid rgba(224, 145, 30, 0.8);
+        color: #5e3a14;
+        border: 1px solid rgba(208, 169, 119, 0.9);
         text-transform: uppercase;
         letter-spacing: 0.12em;
         white-space: nowrap;
       }
 
       .badge-pill.breakfast {
-        background: #f3f7e7;
+        background: #eef4df;
         color: #3f6212;
         border-color: rgba(132, 204, 22, 0.9);
       }
       .badge-pill.lunch {
-        background: #e7f3ff;
+        background: #e7f0ff;
         color: #1d4ed8;
         border-color: rgba(59, 130, 246, 0.8);
       }
