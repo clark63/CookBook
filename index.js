@@ -1,21 +1,21 @@
-// index.js (JSON only, with category support)
-
-require("dotenv").config({ path: "./connect.env" });
-
-const express = require('express');
 const path = require('path');
+const express = require('express');
 const dotenv = require('dotenv');
-// etc... your other requires
 
-dotenv.config();
+// load env vars from connect.env
+dotenv.config({ path: './connect.env' });
 
-// MUST come before any app.use()
+// create express app (must come before any app.use/app.get)
 const app = express();
 
-// Now it's safe to serve static files
+// body parsing (if you use JSON/form data)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// serve static files from /Public
 app.use(express.static(path.join(__dirname, 'Public')));
 
-// Home route
+// home page route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'Public', 'index.html'));
 });
