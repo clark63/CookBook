@@ -1,8 +1,8 @@
 const path = require('path');
 const express = require('express');
 const dotenv = require('dotenv');
+const { MongoClient } = require('mongodb'); // <<< ADD THIS
 
-// load env vars from connect.env
 dotenv.config({ path: './connect.env' });
 
 // create express app (must come before any app.use/app.get)
