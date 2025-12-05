@@ -111,60 +111,53 @@ async function startServer() {
         res.status(500).json({ error: "Server error while saving recipe" });
       }
     });
+// helper to work with string or ObjectId _id
+function buildIdQuery(id) {
+  try {
+    return { _id: new ObjectId(id) };
+  } catch {
+    return { _id: id };
+  }
+}
 
-    // helper to build a query that works for ObjectId OR string ids
-    function buildIdQuery(id) {
-      try {
-        const oid = new ObjectId(id);
-        // try both forms in case some documents have string _id from early days
-        return { $or: [{ _id: oid }, { _id: id }] };
-      } catch {
-        // id isn't a valid ObjectId, fall back to plain string
-        return { _id: id };
-      }
+// UPDATE a recipe
+app.put("/api/recipes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body || {};
+    const update = {};
+
+    if (body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (!title) return res.status(400).json({ error: "Title cannot be empty" });
+      update.title = title;
     }
 
-    // UPDATE a recipe
-    app.put("/api/recipes/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const body = req.body || {};
-        const update = {};
+    if (body.description !== undefined) update.description = body.description;
+    if (body.ingredients !== undefined)
+      update.ingredients = splitLines(body.ingredients);
+    if (body.steps !== undefined)
+      update.steps = splitLines(body.steps);
+    if (body.category !== undefined)
+      update.category = body.category || "Uncategorized";
 
-        if (body.title !== undefined) {
-          const title = String(body.title).trim();
-          if (!title) {
-            return res.status(400).json({ error: "Title cannot be empty" });
-          }
-          update.title = title;
-        }
+    const query = buildIdQuery(id);
 
-        if (body.description !== undefined) {
-          update.description = body.description;
-        }
+    const result = await recipes.findOneAndUpdate(
+      query,
+      { $set: update },
+      { returnDocument: "after" }
+    );
 
-        if (body.ingredients !== undefined) {
-          update.ingredients = splitLines(body.ingredients);
-        }
+    if (!result.value)
+      return res.status(404).json({ error: "Recipe not found" });
 
-        if (body.steps !== undefined) {
-          update.steps = splitLines(body.steps);
-        }
-
-        if (body.category !== undefined) {
-          update.category =
-            (body.category && body.category.trim()) || "Uncategorized";
-        }
-
-        console.log("Updating recipe", id, "with", update);
-
-        const query = buildIdQuery(id);
-
-        const result = await recipes.findOneAndUpdate(
-          query,
-          { $set: update },
-          { returnDocument: "after" }
-        );
+    res.json({ ...result.value, _id: result.value._id.toString() });
+  } catch (err) {
+    console.error("❌ Update error:", err);
+    res.status(500).json({ error: "Failed to update recipe" });
+  }
+});
 
         if (!result.value) {
           console.error("Recipe not found for update:", id);
