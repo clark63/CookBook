@@ -1,3 +1,4 @@
+// index.js
 const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
@@ -39,6 +40,16 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
+// Try to use ObjectId; if that fails, fall back to string _id
+function buildIdQuery(id) {
+  try {
+    const oid = new ObjectId(id);
+    return { $or: [{ _id: oid }, { _id: id }] };
+  } catch {
+    return { _id: id };
+  }
+}
+
 // ---- START SERVER ----
 async function startServer() {
   const client = new MongoClient(uri);
@@ -51,7 +62,7 @@ async function startServer() {
     const db = client.db(DB_NAME);
     const recipes = db.collection(COLLECTION_NAME);
 
-    // Health check (used by app.js)
+    // Health check
     app.get("/api/health", async (req, res) => {
       try {
         await db.command({ ping: 1 });
@@ -62,13 +73,13 @@ async function startServer() {
       }
     });
 
-    // Get all recipes
+    // GET all recipes
     app.get("/api/recipes", async (req, res) => {
       try {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
         const cleaned = docs.map((d) => ({
           ...d,
-          _id: d._id.toString(), // always send _id as string to the frontend
+          _id: d._id.toString(), // always send id as string
         }));
         res.json(cleaned);
       } catch (err) {
@@ -77,7 +88,7 @@ async function startServer() {
       }
     });
 
-    // CREATE a recipe
+    // CREATE recipe
     app.post("/api/recipes", async (req, res) => {
       try {
         const body = req.body || {};
@@ -111,53 +122,48 @@ async function startServer() {
         res.status(500).json({ error: "Server error while saving recipe" });
       }
     });
-// helper to work with string or ObjectId _id
-function buildIdQuery(id) {
-  try {
-    return { _id: new ObjectId(id) };
-  } catch {
-    return { _id: id };
-  }
-}
 
-// UPDATE a recipe
-app.put("/api/recipes/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const body = req.body || {};
-    const update = {};
+    // UPDATE recipe
+    app.put("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const body = req.body || {};
+        const update = {};
 
-    if (body.title !== undefined) {
-      const title = String(body.title).trim();
-      if (!title) return res.status(400).json({ error: "Title cannot be empty" });
-      update.title = title;
-    }
+        if (body.title !== undefined) {
+          const title = String(body.title).trim();
+          if (!title) {
+            return res.status(400).json({ error: "Title cannot be empty" });
+          }
+          update.title = title;
+        }
 
-    if (body.description !== undefined) update.description = body.description;
-    if (body.ingredients !== undefined)
-      update.ingredients = splitLines(body.ingredients);
-    if (body.steps !== undefined)
-      update.steps = splitLines(body.steps);
-    if (body.category !== undefined)
-      update.category = body.category || "Uncategorized";
+        if (body.description !== undefined) {
+          update.description = body.description;
+        }
 
-    const query = buildIdQuery(id);
+        if (body.ingredients !== undefined) {
+          update.ingredients = splitLines(body.ingredients);
+        }
 
-    const result = await recipes.findOneAndUpdate(
-      query,
-      { $set: update },
-      { returnDocument: "after" }
-    );
+        if (body.steps !== undefined) {
+          update.steps = splitLines(body.steps);
+        }
 
-    if (!result.value)
-      return res.status(404).json({ error: "Recipe not found" });
+        if (body.category !== undefined) {
+          update.category =
+            (body.category && body.category.trim()) || "Uncategorized";
+        }
 
-    res.json({ ...result.value, _id: result.value._id.toString() });
-  } catch (err) {
-    console.error("❌ Update error:", err);
-    res.status(500).json({ error: "Failed to update recipe" });
-  }
-});
+        console.log("Updating recipe", id, "with", update);
+
+        const query = buildIdQuery(id);
+
+        const result = await recipes.findOneAndUpdate(
+          query,
+          { $set: update },
+          { returnDocument: "after" }
+        );
 
         if (!result.value) {
           console.error("Recipe not found for update:", id);
@@ -172,7 +178,7 @@ app.put("/api/recipes/:id", async (req, res) => {
       }
     });
 
-    // DELETE a recipe
+    // DELETE recipe
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -192,7 +198,7 @@ app.put("/api/recipes/:id", async (req, res) => {
       }
     });
 
-    // Add a comment to a recipe
+    // ADD comment
     app.post("/api/recipes/:id/comments", async (req, res) => {
       try {
         const body = req.body || {};
