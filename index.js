@@ -8,8 +8,8 @@ dotenv.config({ path: "./connect.env" });
 const app = express();
 
 // body parsing (JSON + form)
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // serve static files from /Public  (make sure folder name matches!)
 app.use(express.static(path.join(__dirname, "Public")));
