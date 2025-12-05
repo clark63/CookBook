@@ -8,19 +8,17 @@ dotenv.config({ path: "./connect.env" });
 
 const app = express();
 
-// body parsing (JSON + form)
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-
-// serve static files from /Public  (make sure folder name matches!)
+// --- MIDDLEWARE ---
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "Public")));
 
-// home page route
+// home page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "Public", "index.html"));
 });
 
-// ---- ENV ----
+// --- ENV ---
 const uri = process.env.MONGODB_URI;
 const DB_NAME = process.env.DB_NAME || "cookbook";
 const COLLECTION_NAME = process.env.COLLECTION_NAME || "recipes";
@@ -31,7 +29,7 @@ if (!uri) {
   process.exit(1);
 }
 
-// ---- HELPERS ----
+// --- HELPERS ---
 function splitLines(value) {
   if (!value) return [];
   return String(value)
@@ -40,20 +38,12 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
-// Build a query that matches BOTH:
-//   {_id: "<string id>"}
-//   {_id: ObjectId("<same hex>")}  (if valid)
-function buildIdQuery(id) {
-  const clauses = [{ _id: id }];
-
-  if (ObjectId.isValid(id)) {
-    clauses.push({ _id: new ObjectId(id) });
-  }
-
-  return { $or: clauses };
+function cleanRecipe(doc) {
+  if (!doc) return null;
+  return { ...doc, _id: doc._id.toString() };
 }
 
-// ---- START SERVER ----
+// --- START SERVER ---
 async function startServer() {
   const client = new MongoClient(uri);
 
@@ -65,7 +55,7 @@ async function startServer() {
     const db = client.db(DB_NAME);
     const recipes = db.collection(COLLECTION_NAME);
 
-    // Health check (used by app.js)
+    // HEALTH CHECK
     app.get("/api/health", async (req, res) => {
       try {
         await db.command({ ping: 1 });
@@ -76,159 +66,143 @@ async function startServer() {
       }
     });
 
-    // Get all recipes
+    // GET ALL RECIPES
     app.get("/api/recipes", async (req, res) => {
       try {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
-
-        const cleaned = docs.map((d) => ({
-          ...d,
-          // always send _id to the frontend as a string
-          _id: typeof d._id === "string" ? d._id : d._id.toString(),
-        }));
-
-        res.json(cleaned);
+        res.json(docs.map(cleanRecipe));
       } catch (err) {
         console.error("❌ Error fetching recipes:", err);
         res.status(500).json({ error: "Failed to fetch recipes" });
       }
     });
 
-    // Add a recipe (CREATE)
+    // CREATE RECIPE
     app.post("/api/recipes", async (req, res) => {
       try {
         const body = req.body || {};
         const title = (body.title || "").trim();
-        const description = body.description || "";
-        const ingredientsRaw = body.ingredients || "";
-        const stepsRaw = body.steps || "";
-        const category =
-          (body.category && body.category.trim()) || "Uncategorized";
 
         if (!title) {
           return res.status(400).json({ error: "Title is required" });
         }
 
-        // 👇 force a STRING id for new documents
-        const id = new ObjectId().toHexString();
-
         const recipe = {
-          _id: id, // string _id in MongoDB
           title,
-          description,
-          ingredients: splitLines(ingredientsRaw),
-          steps: splitLines(stepsRaw),
-          category,
+          description: body.description || "",
+          ingredients: splitLines(body.ingredients),
+          steps: splitLines(body.steps),
+          category:
+            (body.category && String(body.category).trim()) || "Uncategorized",
           comments: [],
           createdAt: new Date(),
         };
 
-        await recipes.insertOne(recipe);
-        res.status(201).json(recipe); // already has string _id
+        const result = await recipes.insertOne(recipe);
+        recipe._id = result.insertedId; // attach id so we can clean it
+
+        res.status(201).json(cleanRecipe(recipe));
       } catch (err) {
         console.error("❌ Error saving recipe:", err);
         res.status(500).json({ error: "Server error while saving recipe" });
       }
     });
 
-    
-  // UPDATE a recipe (works for both string and ObjectId _id)
-app.put("/api/recipes/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
+    // UPDATE RECIPE
+    app.put("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
 
-    // 👉 Build a query that works whether _id is a string or an ObjectId
-    const query = ObjectId.isValid(id)
-      ? { _id: new ObjectId(id) }
-      : { _id: id };
+        let mongoId;
+        try {
+          mongoId = new ObjectId(id);
+        } catch (e) {
+          console.error("Invalid ObjectId for update:", id);
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
 
-    const body = req.body || {};
-    const update = {};
+        const body = req.body || {};
+        const title = body.title !== undefined ? String(body.title).trim() : "";
 
-    if (body.title !== undefined) {
-      const title = String(body.title).trim();
-      if (!title) {
-        return res.status(400).json({ error: "Title cannot be empty" });
+        if (!title) {
+          return res.status(400).json({ error: "Title cannot be empty" });
+        }
+
+        const update = {
+          title,
+          description: body.description || "",
+          ingredients: splitLines(body.ingredients),
+          steps: splitLines(body.steps),
+          category:
+            (body.category && String(body.category).trim()) || "Uncategorized",
+          // optional: track when it was edited
+          updatedAt: new Date(),
+        };
+
+        // first update
+        const result = await recipes.updateOne(
+          { _id: mongoId },
+          { $set: update }
+        );
+
+        if (result.matchedCount === 0) {
+          console.error("Recipe not found for update:", id);
+          return res.status(404).json({ error: "Recipe not found" });
+        }
+
+        // then fetch the updated doc
+        const updatedDoc = await recipes.findOne({ _id: mongoId });
+        res.json(cleanRecipe(updatedDoc));
+      } catch (err) {
+        console.error("❌ Error updating recipe:", err);
+        res.status(500).json({ error: "Failed to update recipe" });
       }
-      update.title = title;
-    }
+    });
 
-    if (body.description !== undefined) {
-      update.description = body.description;
-    }
+    // DELETE RECIPE
+    app.delete("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        let mongoId;
+        try {
+          mongoId = new ObjectId(id);
+        } catch (e) {
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
 
-    if (body.ingredients !== undefined) {
-      update.ingredients = splitLines(body.ingredients);
-    }
+        const result = await recipes.deleteOne({ _id: mongoId });
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ error: "Recipe not found" });
+        }
 
-    if (body.steps !== undefined) {
-      update.steps = splitLines(body.steps);
-    }
+        res.json({ ok: true });
+      } catch (err) {
+        console.error("❌ Error deleting recipe:", err);
+        res.status(500).json({ error: "Failed to delete recipe" });
+      }
+    });
 
-    if (body.category !== undefined) {
-      update.category =
-        (body.category && body.category.trim()) || "Uncategorized";
-    }
-
-    const result = await recipes.findOneAndUpdate(
-      query,
-      { $set: update },
-      { returnDocument: "after" }
-    );
-
-    if (!result.value) {
-      return res.status(404).json({ error: "Recipe not found" });
-    }
-
-    const updated = { ...result.value, _id: result.value._id.toString() };
-    res.json(updated);
-  } catch (err) {
-    console.error("❌ Error updating recipe:", err);
-    res.status(500).json({ error: "Failed to update recipe" });
-  }
-});
-
-
-    // DELETE a recipe (works for both string and ObjectId _id)
-app.delete("/api/recipes/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    // 👉 Same trick: handle both string and ObjectId
-    const query = ObjectId.isValid(id)
-      ? { _id: new ObjectId(id) }
-      : { _id: id };
-
-    const result = await recipes.deleteOne(query);
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "Recipe not found" });
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("❌ Error deleting recipe:", err);
-    res.status(500).json({ error: "Failed to delete recipe" });
-  }
-});
-
-
-    // Add a comment to a recipe
+    // ADD COMMENT
     app.post("/api/recipes/:id/comments", async (req, res) => {
       try {
-        const body = req.body || {};
-        const text = (body.text || "").trim();
+        const text = (req.body.text || "").trim();
         const id = req.params.id;
 
         if (!text) {
           return res.status(400).json({ error: "Comment text is required" });
         }
 
-        const filter = buildIdQuery(id);
+        let mongoId;
+        try {
+          mongoId = new ObjectId(id);
+        } catch (e) {
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
+
         const comment = { text, createdAt: new Date() };
 
         const result = await recipes.findOneAndUpdate(
-          filter,
+          { _id: mongoId },
           { $push: { comments: comment } },
           { returnDocument: "after" }
         );
@@ -237,22 +211,14 @@ app.delete("/api/recipes/:id", async (req, res) => {
           return res.status(404).json({ error: "Recipe not found" });
         }
 
-        const updated = {
-          ...result.value,
-          _id:
-            typeof result.value._id === "string"
-              ? result.value._id
-              : result.value._id.toString(),
-        };
-
-        res.json(updated);
+        res.json(cleanRecipe(result.value));
       } catch (err) {
         console.error("❌ Error adding comment:", err);
         res.status(500).json({ error: "Failed to add comment" });
       }
     });
 
-    // Start HTTP server
+    // START HTTP SERVER
     app.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);
     });
