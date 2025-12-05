@@ -1,23 +1,27 @@
+// index.js
 const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
 const { MongoClient, ObjectId } = require("mongodb");
 
+// Load env vars from connect.env
 dotenv.config({ path: "./connect.env" });
 
 const app = express();
 
-// ---- MIDDLEWARE ----
+// ---------- MIDDLEWARE ----------
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "Public"))); // static files
 
-// home page route
+// Serve static files from /Public  (folder name is case-sensitive)
+app.use(express.static(path.join(__dirname, "Public")));
+
+// Home page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "Public", "index.html"));
 });
 
-// ---- ENV ----
+// ---------- ENV ----------
 const uri = process.env.MONGODB_URI;
 const DB_NAME = process.env.DB_NAME || "cookbook";
 const COLLECTION_NAME = process.env.COLLECTION_NAME || "recipes";
@@ -28,7 +32,7 @@ if (!uri) {
   process.exit(1);
 }
 
-// ---- HELPERS ----
+// ---------- HELPERS ----------
 function splitLines(value) {
   if (!value) return [];
   return String(value)
@@ -37,17 +41,18 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
-// for delete/comments we still accept both ObjectId + string
+// For update/delete/comment: support both ObjectId and string _id
 function buildIdQuery(id) {
   try {
     const oid = new ObjectId(id);
     return { $or: [{ _id: oid }, { _id: id }] };
   } catch {
+    // If id is not a valid ObjectId, just treat it as a string _id
     return { _id: id };
   }
 }
 
-// ---- START SERVER ----
+// ---------- START SERVER ----------
 async function startServer() {
   const client = new MongoClient(uri);
 
@@ -59,7 +64,7 @@ async function startServer() {
     const db = client.db(DB_NAME);
     const recipes = db.collection(COLLECTION_NAME);
 
-    // Health check
+    // ---- HEALTH CHECK (used by app.js) ----
     app.get("/api/health", async (req, res) => {
       try {
         await db.command({ ping: 1 });
@@ -70,11 +75,11 @@ async function startServer() {
       }
     });
 
-    // GET all recipes
+    // ---- GET ALL RECIPES ----
     app.get("/api/recipes", async (req, res) => {
       try {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
-        // send whatever _id is stored (string for new ones)
+        // New recipes will have _id as a string; older ones might be ObjectId.
         res.json(docs);
       } catch (err) {
         console.error("❌ Error fetching recipes:", err);
@@ -82,7 +87,7 @@ async function startServer() {
       }
     });
 
-    // CREATE recipe – uses string _id we control
+    // ---- CREATE RECIPE ----
     app.post("/api/recipes", async (req, res) => {
       try {
         const body = req.body || {};
@@ -97,10 +102,11 @@ async function startServer() {
           return res.status(400).json({ error: "Title is required" });
         }
 
+        // Use a string id that we control
         const stringId = new ObjectId().toString();
 
         const recipe = {
-          _id: stringId, // string id
+          _id: stringId, // IMPORTANT: string id
           title,
           description,
           ingredients: splitLines(ingredientsRaw),
@@ -112,6 +118,7 @@ async function startServer() {
 
         const result = await recipes.insertOne(recipe);
         console.log("Inserted recipe with _id:", result.insertedId);
+
         res.status(201).json(recipe);
       } catch (err) {
         console.error("❌ Error saving recipe:", err);
@@ -119,7 +126,7 @@ async function startServer() {
       }
     });
 
-    // UPDATE recipe – look up by string _id
+    // ---- UPDATE RECIPE ----
     app.put("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -147,10 +154,11 @@ async function startServer() {
             (body.category && body.category.trim()) || "Uncategorized";
         }
 
-        console.log("Updating recipe with _id (string):", id);
+        const query = buildIdQuery(id);
+        console.log("Updating recipe with id:", id, "using query:", query);
 
         const result = await recipes.findOneAndUpdate(
-          { _id: id }, // string lookup
+          query,
           { $set: update },
           { returnDocument: "after" }
         );
@@ -167,7 +175,7 @@ async function startServer() {
       }
     });
 
-    // DELETE recipe – support both old ObjectIds + new string ids
+    // ---- DELETE RECIPE ----
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -187,7 +195,7 @@ async function startServer() {
       }
     });
 
-    // ADD comment
+    // ---- ADD COMMENT ----
     app.post("/api/recipes/:id/comments", async (req, res) => {
       try {
         const body = req.body || {};
@@ -219,7 +227,7 @@ async function startServer() {
       }
     });
 
-    // Start HTTP server
+    // ---- START HTTP SERVER ----
     app.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);
     });
