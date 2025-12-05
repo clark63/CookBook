@@ -167,6 +167,73 @@ async function startServer() {
       }
     });
 
+    
+    // UPDATE a recipe
+    app.put("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        let _id;
+
+        // validate id
+        try {
+          _id = new ObjectId(id);
+        } catch (e) {
+          console.error("Invalid ObjectId for update:", id);
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
+
+        const body = req.body || {};
+        const update = {};
+
+        // only set fields we know about
+        if (body.title !== undefined) {
+          const title = String(body.title).trim();
+          if (!title) {
+            return res.status(400).json({ error: "Title cannot be empty" });
+          }
+          update.title = title;
+        }
+
+        if (body.description !== undefined) {
+          update.description = body.description;
+        }
+
+        if (body.ingredients !== undefined) {
+          update.ingredients = splitLines(body.ingredients);
+        }
+
+        if (body.steps !== undefined) {
+          update.steps = splitLines(body.steps);
+        }
+
+        if (body.category !== undefined) {
+          update.category =
+            (body.category && body.category.trim()) || "Uncategorized";
+        }
+
+        console.log("Updating recipe", id, "with", update);
+
+        const result = await recipes.findOneAndUpdate(
+          { _id },
+          { $set: update },
+          { returnDocument: "after" }
+        );
+
+        if (!result.value) {
+          console.error("Recipe not found for update:", id);
+          return res.status(404).json({ error: "Recipe not found" });
+        }
+
+        const updated = { ...result.value, _id: result.value._id.toString() };
+        res.json(updated);
+      } catch (err) {
+        console.error("❌ Error updating recipe:", err);
+        res.status(500).json({ error: "Failed to update recipe" });
+      }
+    });
+
+
+    
     // DELETE a recipe
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
