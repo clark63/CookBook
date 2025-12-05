@@ -131,85 +131,87 @@ async function startServer() {
       }
     });
 
-    // UPDATE a recipe
-    app.put("/api/recipes/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const filter = buildIdQuery(id);
+    
+  // UPDATE a recipe (works for both string and ObjectId _id)
+app.put("/api/recipes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
 
-        const body = req.body || {};
-        const update = {};
+    // 👉 Build a query that works whether _id is a string or an ObjectId
+    const query = ObjectId.isValid(id)
+      ? { _id: new ObjectId(id) }
+      : { _id: id };
 
-        if (body.title !== undefined) {
-          const title = String(body.title).trim();
-          if (!title) {
-            return res.status(400).json({ error: "Title cannot be empty" });
-          }
-          update.title = title;
-        }
+    const body = req.body || {};
+    const update = {};
 
-        if (body.description !== undefined) {
-          update.description = body.description;
-        }
-
-        if (body.ingredients !== undefined) {
-          update.ingredients = splitLines(body.ingredients);
-        }
-
-        if (body.steps !== undefined) {
-          update.steps = splitLines(body.steps);
-        }
-
-        if (body.category !== undefined) {
-          update.category =
-            (body.category && body.category.trim()) || "Uncategorized";
-        }
-
-        console.log("Updating recipe", id, "with", update);
-
-        const result = await recipes.findOneAndUpdate(
-          filter,
-          { $set: update },
-          { returnDocument: "after" }
-        );
-
-        if (!result.value) {
-          console.error("Recipe not found for update:", id);
-          return res.status(404).json({ error: "Recipe not found" });
-        }
-
-        const updated = {
-          ...result.value,
-          _id:
-            typeof result.value._id === "string"
-              ? result.value._id
-              : result.value._id.toString(),
-        };
-
-        res.json(updated);
-      } catch (err) {
-        console.error("❌ Error updating recipe:", err);
-        res.status(500).json({ error: "Failed to update recipe" });
+    if (body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (!title) {
+        return res.status(400).json({ error: "Title cannot be empty" });
       }
-    });
+      update.title = title;
+    }
 
-    // DELETE a recipe
-    app.delete("/api/recipes/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const filter = buildIdQuery(id);
+    if (body.description !== undefined) {
+      update.description = body.description;
+    }
 
-        const result = await recipes.deleteOne(filter);
-        if (result.deletedCount === 0) {
-          return res.status(404).json({ error: "Recipe not found" });
-        }
+    if (body.ingredients !== undefined) {
+      update.ingredients = splitLines(body.ingredients);
+    }
 
-        res.json({ ok: true });
-      } catch (err) {
-        console.error("❌ Error deleting recipe:", err);
-        res.status(500).json({ error: "Failed to delete recipe" });
-      }
-    });
+    if (body.steps !== undefined) {
+      update.steps = splitLines(body.steps);
+    }
+
+    if (body.category !== undefined) {
+      update.category =
+        (body.category && body.category.trim()) || "Uncategorized";
+    }
+
+    const result = await recipes.findOneAndUpdate(
+      query,
+      { $set: update },
+      { returnDocument: "after" }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    const updated = { ...result.value, _id: result.value._id.toString() };
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Error updating recipe:", err);
+    res.status(500).json({ error: "Failed to update recipe" });
+  }
+});
+
+
+    // DELETE a recipe (works for both string and ObjectId _id)
+app.delete("/api/recipes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // 👉 Same trick: handle both string and ObjectId
+    const query = ObjectId.isValid(id)
+      ? { _id: new ObjectId(id) }
+      : { _id: id };
+
+    const result = await recipes.deleteOne(query);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ Error deleting recipe:", err);
+    res.status(500).json({ error: "Failed to delete recipe" });
+  }
+});
+
 
     // Add a comment to a recipe
     app.post("/api/recipes/:id/comments", async (req, res) => {
