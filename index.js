@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// serve static files from /Public
+// serve static files from /Public  (make sure folder name matches!)
 app.use(express.static(path.join(__dirname, "Public")));
 
 // home page route
@@ -40,17 +40,17 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
-// build an _id query that works for both string and ObjectId ids
+// Build a query that matches BOTH:
+//   {_id: "<string id>"}
+//   {_id: ObjectId("<same hex>")}  (if valid)
 function buildIdQuery(id) {
-  if (!id) return null;
+  const clauses = [{ _id: id }];
 
-  // If it's a valid ObjectId string, match either the string _id OR ObjectId _id
   if (ObjectId.isValid(id)) {
-    return { _id: { $in: [id, new ObjectId(id)] } };
+    clauses.push({ _id: new ObjectId(id) });
   }
 
-  // Fallback: just treat it as a plain string id
-  return { _id: id };
+  return { $or: clauses };
 }
 
 // ---- START SERVER ----
@@ -81,10 +81,10 @@ async function startServer() {
       try {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
 
-        // always send _id to frontend as a string
         const cleaned = docs.map((d) => ({
           ...d,
-          _id: d._id.toString(),
+          // always send _id to the frontend as a string
+          _id: typeof d._id === "string" ? d._id : d._id.toString(),
         }));
 
         res.json(cleaned);
@@ -109,7 +109,11 @@ async function startServer() {
           return res.status(400).json({ error: "Title is required" });
         }
 
+        // 👇 force a STRING id for new documents
+        const id = new ObjectId().toHexString();
+
         const recipe = {
+          _id: id, // string _id in MongoDB
           title,
           description,
           ingredients: splitLines(ingredientsRaw),
@@ -119,10 +123,8 @@ async function startServer() {
           createdAt: new Date(),
         };
 
-        const result = await recipes.insertOne(recipe);
-        res
-          .status(201)
-          .json({ ...recipe, _id: result.insertedId.toString() });
+        await recipes.insertOne(recipe);
+        res.status(201).json(recipe); // already has string _id
       } catch (err) {
         console.error("❌ Error saving recipe:", err);
         res.status(500).json({ error: "Server error while saving recipe" });
@@ -133,12 +135,7 @@ async function startServer() {
     app.put("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        console.log("🔧 PUT /api/recipes/:id with id:", id);
-
         const filter = buildIdQuery(id);
-        if (!filter) {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
 
         const body = req.body || {};
         const update = {};
@@ -168,8 +165,7 @@ async function startServer() {
             (body.category && body.category.trim()) || "Uncategorized";
         }
 
-        console.log("Updating with filter:", JSON.stringify(filter));
-        console.log("Update payload:", update);
+        console.log("Updating recipe", id, "with", update);
 
         const result = await recipes.findOneAndUpdate(
           filter,
@@ -184,8 +180,12 @@ async function startServer() {
 
         const updated = {
           ...result.value,
-          _id: result.value._id.toString(),
+          _id:
+            typeof result.value._id === "string"
+              ? result.value._id
+              : result.value._id.toString(),
         };
+
         res.json(updated);
       } catch (err) {
         console.error("❌ Error updating recipe:", err);
@@ -197,16 +197,10 @@ async function startServer() {
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        console.log("🗑 DELETE /api/recipes/:id with id:", id);
-
         const filter = buildIdQuery(id);
-        if (!filter) {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
 
         const result = await recipes.deleteOne(filter);
         if (result.deletedCount === 0) {
-          console.error("Recipe not found for delete:", id);
           return res.status(404).json({ error: "Recipe not found" });
         }
 
@@ -220,19 +214,15 @@ async function startServer() {
     // Add a comment to a recipe
     app.post("/api/recipes/:id/comments", async (req, res) => {
       try {
-        const id = req.params.id;
         const body = req.body || {};
         const text = (body.text || "").trim();
+        const id = req.params.id;
 
         if (!text) {
           return res.status(400).json({ error: "Comment text is required" });
         }
 
         const filter = buildIdQuery(id);
-        if (!filter) {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
-
         const comment = { text, createdAt: new Date() };
 
         const result = await recipes.findOneAndUpdate(
@@ -242,13 +232,15 @@ async function startServer() {
         );
 
         if (!result.value) {
-          console.error("Recipe not found for comment:", id);
           return res.status(404).json({ error: "Recipe not found" });
         }
 
         const updated = {
           ...result.value,
-          _id: result.value._id.toString(),
+          _id:
+            typeof result.value._id === "string"
+              ? result.value._id
+              : result.value._id.toString(),
         };
 
         res.json(updated);
