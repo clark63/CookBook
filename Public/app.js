@@ -1,6 +1,6 @@
 // public/app.js
 
-// Status dots
+// ----- STATUS DOTS -----
 const jsDot = document.getElementById("js-dot");
 const jsStatusText = document.getElementById("js-status-text");
 jsDot.className = "dot dot-ok";
@@ -9,14 +9,25 @@ jsStatusText.textContent = "Loaded";
 const dbDot = document.getElementById("db-dot");
 const dbStatusText = document.getElementById("db-status-text");
 
-// DOM refs
+// ----- DOM ELEMENTS -----
 const recipesContainer = document.getElementById("recipes-container");
 const form = document.getElementById("recipe-form");
 const submitButton = form.querySelector('button[type="submit"]');
 
-let editingId = null;
+let editingId = null;          // _id of recipe we’re editing
+let currentRecipes = [];
 
-// ---- HEALTH CHECK ----
+// ----- HELPERS -----
+function ensureArrayMaybeLines(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  return String(val)
+    .split("\n")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+// ----- DB HEALTH -----
 async function checkDbHealth() {
   try {
     const res = await fetch("/api/health");
@@ -37,17 +48,7 @@ async function checkDbHealth() {
   }
 }
 
-// ---- HELPERS ----
-function ensureArrayMaybeLines(val) {
-  if (Array.isArray(val)) return val;
-  if (!val) return [];
-  return String(val)
-    .split("\n")
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
-
-// ---- LOAD & RENDER RECIPES ----
+// ----- LOAD RECIPES -----
 async function loadRecipes() {
   recipesContainer.innerHTML = '<p class="helper">Loading recipes…</p>';
 
@@ -55,6 +56,7 @@ async function loadRecipes() {
     const res = await fetch("/api/recipes");
     if (!res.ok) throw new Error("Failed to fetch recipes");
     const recipes = await res.json();
+    currentRecipes = recipes;
 
     if (!recipes.length) {
       recipesContainer.innerHTML =
@@ -71,15 +73,17 @@ async function loadRecipes() {
   }
 }
 
+// ----- RENDER ONE RECIPE CARD -----
 function renderRecipe(recipe) {
   const item = document.createElement("article");
   item.className = "recipe-item";
 
-  // TITLE + META
+  // Title
   const title = document.createElement("div");
   title.className = "recipe-title";
   title.textContent = recipe.title || "Untitled recipe";
 
+  // Meta (date)
   const meta = document.createElement("div");
   meta.className = "recipe-meta";
   const created = recipe.createdAt
@@ -87,6 +91,7 @@ function renderRecipe(recipe) {
     : "Unknown date";
   meta.textContent = `Saved: ${created}`;
 
+  // Description
   const desc = document.createElement("div");
   desc.textContent =
     recipe.description || "No description. Check ingredients below.";
@@ -95,7 +100,7 @@ function renderRecipe(recipe) {
   item.appendChild(meta);
   item.appendChild(desc);
 
-  // CATEGORY badge
+  // Category badge
   if (recipe.category) {
     const badge = document.createElement("span");
     badge.className = "badge-pill";
@@ -103,7 +108,7 @@ function renderRecipe(recipe) {
     item.appendChild(badge);
   }
 
-  // INGREDIENTS
+  // Ingredients
   const ingredients = ensureArrayMaybeLines(recipe.ingredients);
   if (ingredients.length) {
     const ingTitle = document.createElement("div");
@@ -121,7 +126,7 @@ function renderRecipe(recipe) {
     item.appendChild(ul);
   }
 
-  // STEPS
+  // Steps
   const steps = ensureArrayMaybeLines(recipe.steps);
   if (steps.length) {
     const stepsTitle = document.createElement("div");
@@ -139,12 +144,13 @@ function renderRecipe(recipe) {
     item.appendChild(ol);
   }
 
-  // COMMENTS SECTION (display only)
+  // Comments title
   const commentsTitle = document.createElement("div");
   commentsTitle.className = "recipe-section-title";
   commentsTitle.textContent = "Comments";
   item.appendChild(commentsTitle);
 
+  // Comments list
   const commentsList = document.createElement("ul");
   commentsList.className = "comments-list";
 
@@ -177,7 +183,7 @@ function renderRecipe(recipe) {
 
   item.appendChild(commentsList);
 
-  // COMMENT FORM
+  // Comment form
   const commentForm = document.createElement("form");
   commentForm.className = "comment-form";
 
@@ -220,7 +226,7 @@ function renderRecipe(recipe) {
 
   item.appendChild(commentForm);
 
-  // ACTION BUTTONS: EDIT + DELETE
+  // ----- ACTION BUTTONS -----
   const actions = document.createElement("div");
   actions.style.marginTop = "8px";
   actions.style.display = "flex";
@@ -242,7 +248,7 @@ function renderRecipe(recipe) {
   deleteBtn.style.fontSize = "11px";
   deleteBtn.style.padding = "6px 10px";
   deleteBtn.style.borderRadius = "999px";
-  deleteBtn.style.border = "1px solid rgba(220,38,38,0.7)";
+  deleteBtn.style.border = "1px solid rgba(220, 38, 38, 0.7)";
   deleteBtn.style.background = "#fee2e2";
   deleteBtn.style.color = "#991b1b";
   deleteBtn.style.cursor = "pointer";
@@ -251,6 +257,7 @@ function renderRecipe(recipe) {
   actions.appendChild(deleteBtn);
   item.appendChild(actions);
 
+  // Click handlers
   editBtn.addEventListener("click", () => {
     startEditMode(recipe);
   });
@@ -275,8 +282,9 @@ function renderRecipe(recipe) {
   recipesContainer.appendChild(item);
 }
 
+// ----- EDIT MODE -----
 function startEditMode(recipe) {
-  editingId = recipe._id;
+  editingId = recipe._id;  // this is the string id from the server
   console.log("Editing recipe id:", editingId);
 
   form.title.value = recipe.title || "";
@@ -289,7 +297,7 @@ function startEditMode(recipe) {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// ---- FORM SUBMIT: CREATE or UPDATE ----
+// ----- FORM SUBMISSION (CREATE OR UPDATE) -----
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -305,7 +313,7 @@ form.addEventListener("submit", async (e) => {
   const url = editingId ? `/api/recipes/${editingId}` : "/api/recipes";
   const method = editingId ? "PUT" : "POST";
 
-  console.log("Submitting", method, url, "with id:", editingId);
+  console.log(`Submitting ${method} ${url} with id:`, editingId);
 
   try {
     const res = await fetch(url, {
@@ -332,6 +340,6 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// ---- INIT ----
+// ----- INIT -----
 checkDbHealth();
 loadRecipes();
