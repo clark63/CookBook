@@ -12,6 +12,11 @@ const dbStatusText = document.getElementById("db-status-text");
 const recipesContainer = document.getElementById("recipes-container");
 const form = document.getElementById("recipe-form");
 
+let currentRecipes = [];
+let editingId = null;
+
+const submitButton = form.querySelector('button[type="submit"]');
+
 // DB health check
 async function checkDbHealth() {
   try {
@@ -50,6 +55,7 @@ async function loadRecipes() {
     const res = await fetch("/api/recipes");
     if (!res.ok) throw new Error("Failed to fetch recipes");
     const recipes = await res.json();
+    currentRecipes = recipes;
 
     if (!recipes.length) {
       recipesContainer.innerHTML =
@@ -89,6 +95,14 @@ function renderRecipe(recipe) {
   item.appendChild(title);
   item.appendChild(meta);
   item.appendChild(desc);
+
+  // CATEGORY BADGE (optional, if you want to show it)
+  if (recipe.category) {
+    const badge = document.createElement("span");
+    badge.className = "badge-pill";
+    badge.textContent = recipe.category;
+    item.appendChild(badge);
+  }
 
   // INGREDIENTS
   const ingredients = ensureArrayMaybeLines(recipe.ingredients);
@@ -207,10 +221,75 @@ function renderRecipe(recipe) {
 
   item.appendChild(commentForm);
 
+  // ACTION BUTTONS: EDIT + DELETE
+  const actions = document.createElement("div");
+  actions.style.marginTop = "8px";
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.textContent = "Edit recipe";
+  editBtn.style.fontSize = "11px";
+  editBtn.style.padding = "6px 10px";
+  editBtn.style.borderRadius = "999px";
+  editBtn.style.border = "1px solid rgba(76,106,146,0.7)";
+  editBtn.style.background = "#eef3fb";
+  editBtn.style.cursor = "pointer";
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.textContent = "Delete";
+  deleteBtn.style.fontSize = "11px";
+  deleteBtn.style.padding = "6px 10px";
+  deleteBtn.style.borderRadius = "999px";
+  deleteBtn.style.border = "1px solid rgba(220, 38, 38, 0.7)";
+  deleteBtn.style.background = "#fee2e2";
+  deleteBtn.style.color = "#991b1b";
+  deleteBtn.style.cursor = "pointer";
+
+  actions.appendChild(editBtn);
+  actions.appendChild(deleteBtn);
+  item.appendChild(actions);
+
+  editBtn.addEventListener("click", () => {
+    startEditMode(recipe);
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    if (!confirm("Delete this recipe?")) return;
+    try {
+      const res = await fetch(`/api/recipes/${recipe._id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        alert("Error deleting recipe");
+        return;
+      }
+      await loadRecipes();
+    } catch (err) {
+      console.error(err);
+      alert("Network error while deleting recipe.");
+    }
+  });
+
   recipesContainer.appendChild(item);
 }
 
-// Handle form submission (JSON)
+function startEditMode(recipe) {
+  editingId = recipe._id;
+
+  form.title.value = recipe.title || "";
+  form.category.value = recipe.category || "Uncategorized";
+  form.description.value = recipe.description || "";
+  form.ingredients.value = ensureArrayMaybeLines(recipe.ingredients).join("\n");
+  form.steps.value = ensureArrayMaybeLines(recipe.steps).join("\n");
+
+  submitButton.textContent = "Save Changes";
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Handle form submission (create OR update)
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -220,11 +299,15 @@ form.addEventListener("submit", async (e) => {
     description: formData.get("description"),
     ingredients: formData.get("ingredients"),
     steps: formData.get("steps"),
+    category: formData.get("category") || "Uncategorized",
   };
 
+  const url = editingId ? `/api/recipes/${editingId}` : "/api/recipes";
+  const method = editingId ? "PUT" : "POST";
+
   try {
-    const res = await fetch("/api/recipes", {
-      method: "POST",
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -237,6 +320,9 @@ form.addEventListener("submit", async (e) => {
     }
 
     form.reset();
+    editingId = null;
+    submitButton.textContent = "Post Recipe";
+
     await loadRecipes();
   } catch (err) {
     console.error(err);
