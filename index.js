@@ -68,7 +68,7 @@ async function startServer() {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
         const cleaned = docs.map((d) => ({
           ...d,
-          _id: d._id.toString(), // send _id as string to the front-end
+          _id: d._id.toString(), // always send _id as string to the frontend
         }));
         res.json(cleaned);
       } catch (err) {
@@ -77,7 +77,7 @@ async function startServer() {
       }
     });
 
-    // Add a recipe (CREATE)
+    // CREATE a recipe
     app.post("/api/recipes", async (req, res) => {
       try {
         const body = req.body || {};
@@ -112,6 +112,18 @@ async function startServer() {
       }
     });
 
+    // helper to build a query that works for ObjectId OR string ids
+    function buildIdQuery(id) {
+      try {
+        const oid = new ObjectId(id);
+        // try both forms in case some documents have string _id from early days
+        return { $or: [{ _id: oid }, { _id: id }] };
+      } catch {
+        // id isn't a valid ObjectId, fall back to plain string
+        return { _id: id };
+      }
+    }
+
     // UPDATE a recipe
     app.put("/api/recipes/:id", async (req, res) => {
       try {
@@ -119,7 +131,6 @@ async function startServer() {
         const body = req.body || {};
         const update = {};
 
-        // only set fields we know about
         if (body.title !== undefined) {
           const title = String(body.title).trim();
           if (!title) {
@@ -147,10 +158,7 @@ async function startServer() {
 
         console.log("Updating recipe", id, "with", update);
 
-        // works for ObjectId _id or string _id
-        const query = ObjectId.isValid(id)
-          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
-          : { _id: id };
+        const query = buildIdQuery(id);
 
         const result = await recipes.findOneAndUpdate(
           query,
@@ -175,10 +183,7 @@ async function startServer() {
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
-
-        const query = ObjectId.isValid(id)
-          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
-          : { _id: id };
+        const query = buildIdQuery(id);
 
         const result = await recipes.deleteOne(query);
 
@@ -206,10 +211,7 @@ async function startServer() {
         }
 
         const comment = { text, createdAt: new Date() };
-
-        const query = ObjectId.isValid(id)
-          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
-          : { _id: id };
+        const query = buildIdQuery(id);
 
         const result = await recipes.findOneAndUpdate(
           query,
