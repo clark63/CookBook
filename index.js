@@ -7,11 +7,11 @@ dotenv.config({ path: "./connect.env" });
 
 const app = express();
 
-// body parsing (JSON + form)
+// body parsing (JSON + form) – allow larger recipes
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// serve static files from /Public  (make sure folder name matches!)
+// serve static files from /Public
 app.use(express.static(path.join(__dirname, "Public")));
 
 // home page route
@@ -68,7 +68,7 @@ async function startServer() {
         const docs = await recipes.find().sort({ createdAt: -1 }).toArray();
         const cleaned = docs.map((d) => ({
           ...d,
-          _id: d._id.toString(),
+          _id: d._id.toString(), // send _id as string to the front-end
         }));
         res.json(cleaned);
       } catch (err) {
@@ -103,7 +103,9 @@ async function startServer() {
         };
 
         const result = await recipes.insertOne(recipe);
-        res.status(201).json({ ...recipe, _id: result.insertedId.toString() });
+        res
+          .status(201)
+          .json({ ...recipe, _id: result.insertedId.toString() });
       } catch (err) {
         console.error("❌ Error saving recipe:", err);
         res.status(500).json({ error: "Server error while saving recipe" });
@@ -114,74 +116,6 @@ async function startServer() {
     app.put("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        let _id;
-        try {
-          _id = new ObjectId(id);
-        } catch {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
-
-        const body = req.body || {};
-        const update = {};
-
-        if (body.title !== undefined) {
-          const title = String(body.title).trim();
-          if (!title) {
-            return res.status(400).json({ error: "Title cannot be empty" });
-          }
-          update.title = title;
-        }
-
-        if (body.description !== undefined) {
-          update.description = body.description;
-        }
-
-        if (body.ingredients !== undefined) {
-          update.ingredients = splitLines(body.ingredients);
-        }
-
-        if (body.steps !== undefined) {
-          update.steps = splitLines(body.steps);
-        }
-
-        if (body.category !== undefined) {
-          update.category =
-            (body.category && body.category.trim()) || "Uncategorized";
-        }
-
-        const result = await recipes.findOneAndUpdate(
-          { _id },
-          { $set: update },
-          { returnDocument: "after" }
-        );
-
-        if (!result.value) {
-          return res.status(404).json({ error: "Recipe not found" });
-        }
-
-        const updated = { ...result.value, _id: result.value._id.toString() };
-        res.json(updated);
-      } catch (err) {
-        console.error("❌ Error updating recipe:", err);
-        res.status(500).json({ error: "Failed to update recipe" });
-      }
-    });
-
-    
-    // UPDATE a recipe
-    app.put("/api/recipes/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        let _id;
-
-        // validate id
-        try {
-          _id = new ObjectId(id);
-        } catch (e) {
-          console.error("Invalid ObjectId for update:", id);
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
-
         const body = req.body || {};
         const update = {};
 
@@ -213,8 +147,13 @@ async function startServer() {
 
         console.log("Updating recipe", id, "with", update);
 
+        // works for ObjectId _id or string _id
+        const query = ObjectId.isValid(id)
+          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
+          : { _id: id };
+
         const result = await recipes.findOneAndUpdate(
-          { _id },
+          query,
           { $set: update },
           { returnDocument: "after" }
         );
@@ -232,21 +171,19 @@ async function startServer() {
       }
     });
 
-
-    
     // DELETE a recipe
     app.delete("/api/recipes/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        let _id;
-        try {
-          _id = new ObjectId(id);
-        } catch {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
 
-        const result = await recipes.deleteOne({ _id });
+        const query = ObjectId.isValid(id)
+          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
+          : { _id: id };
+
+        const result = await recipes.deleteOne(query);
+
         if (result.deletedCount === 0) {
+          console.error("Recipe not found for delete:", id);
           return res.status(404).json({ error: "Recipe not found" });
         }
 
@@ -268,22 +205,20 @@ async function startServer() {
           return res.status(400).json({ error: "Comment text is required" });
         }
 
-        let _id;
-        try {
-          _id = new ObjectId(id);
-        } catch {
-          return res.status(400).json({ error: "Invalid recipe id" });
-        }
-
         const comment = { text, createdAt: new Date() };
 
+        const query = ObjectId.isValid(id)
+          ? { $or: [{ _id: new ObjectId(id) }, { _id: id }] }
+          : { _id: id };
+
         const result = await recipes.findOneAndUpdate(
-          { _id },
+          query,
           { $push: { comments: comment } },
           { returnDocument: "after" }
         );
 
         if (!result.value) {
+          console.error("Recipe not found for comment:", id);
           return res.status(404).json({ error: "Recipe not found" });
         }
 
