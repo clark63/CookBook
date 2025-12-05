@@ -1,23 +1,22 @@
-const path = require('path');
-const express = require('express');
-const dotenv = require('dotenv');
-const { MongoClient } = require('mongodb'); // <<< ADD THIS
+const path = require("path");
+const express = require("express");
+const dotenv = require("dotenv");
+const { MongoClient, ObjectId } = require("mongodb");
 
-dotenv.config({ path: './connect.env' });
+dotenv.config({ path: "./connect.env" });
 
-// create express app (must come before any app.use/app.get)
 const app = express();
 
-// body parsing (if you use JSON/form data)
+// body parsing (JSON + form)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// serve static files from /Public
-app.use(express.static(path.join(__dirname, 'Public')));
+// serve static files from /Public  (make sure folder name matches!)
+app.use(express.static(path.join(__dirname, "Public")));
 
 // home page route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'Public', 'index.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "Public", "index.html"));
 });
 
 // ---- ENV ----
@@ -30,11 +29,6 @@ if (!uri) {
   console.error("❌ MONGODB_URI missing in connect.env");
   process.exit(1);
 }
-
-// ---- MIDDLEWARE ----
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public"))); // serves cookbook.html & app.js
 
 // ---- HELPERS ----
 function splitLines(value) {
@@ -83,7 +77,7 @@ async function startServer() {
       }
     });
 
-    // Add a recipe (JSON only)
+    // Add a recipe (CREATE)
     app.post("/api/recipes", async (req, res) => {
       try {
         const body = req.body || {};
@@ -113,6 +107,86 @@ async function startServer() {
       } catch (err) {
         console.error("❌ Error saving recipe:", err);
         res.status(500).json({ error: "Server error while saving recipe" });
+      }
+    });
+
+    // UPDATE a recipe
+    app.put("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        let _id;
+        try {
+          _id = new ObjectId(id);
+        } catch {
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
+
+        const body = req.body || {};
+        const update = {};
+
+        if (body.title !== undefined) {
+          const title = String(body.title).trim();
+          if (!title) {
+            return res.status(400).json({ error: "Title cannot be empty" });
+          }
+          update.title = title;
+        }
+
+        if (body.description !== undefined) {
+          update.description = body.description;
+        }
+
+        if (body.ingredients !== undefined) {
+          update.ingredients = splitLines(body.ingredients);
+        }
+
+        if (body.steps !== undefined) {
+          update.steps = splitLines(body.steps);
+        }
+
+        if (body.category !== undefined) {
+          update.category =
+            (body.category && body.category.trim()) || "Uncategorized";
+        }
+
+        const result = await recipes.findOneAndUpdate(
+          { _id },
+          { $set: update },
+          { returnDocument: "after" }
+        );
+
+        if (!result.value) {
+          return res.status(404).json({ error: "Recipe not found" });
+        }
+
+        const updated = { ...result.value, _id: result.value._id.toString() };
+        res.json(updated);
+      } catch (err) {
+        console.error("❌ Error updating recipe:", err);
+        res.status(500).json({ error: "Failed to update recipe" });
+      }
+    });
+
+    // DELETE a recipe
+    app.delete("/api/recipes/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        let _id;
+        try {
+          _id = new ObjectId(id);
+        } catch {
+          return res.status(400).json({ error: "Invalid recipe id" });
+        }
+
+        const result = await recipes.deleteOne({ _id });
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ error: "Recipe not found" });
+        }
+
+        res.json({ ok: true });
+      } catch (err) {
+        console.error("❌ Error deleting recipe:", err);
+        res.status(500).json({ error: "Failed to delete recipe" });
       }
     });
 
@@ -161,7 +235,6 @@ async function startServer() {
     // Start HTTP server
     app.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);
-      console.log(`👉 Open http://localhost:${PORT}/cookbook.html`);
     });
   } catch (err) {
     console.error("❌ Error connecting to MongoDB:", err);
