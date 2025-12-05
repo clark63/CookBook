@@ -1,6 +1,6 @@
 // public/app.js
 
-// Mark JS as loaded
+// Status dots
 const jsDot = document.getElementById("js-dot");
 const jsStatusText = document.getElementById("js-status-text");
 jsDot.className = "dot dot-ok";
@@ -9,15 +9,14 @@ jsStatusText.textContent = "Loaded";
 const dbDot = document.getElementById("db-dot");
 const dbStatusText = document.getElementById("db-status-text");
 
+// DOM refs
 const recipesContainer = document.getElementById("recipes-container");
 const form = document.getElementById("recipe-form");
-
-let currentRecipes = [];
-let editingId = null;
-
 const submitButton = form.querySelector('button[type="submit"]');
 
-// DB health check
+let editingId = null;
+
+// ---- HEALTH CHECK ----
 async function checkDbHealth() {
   try {
     const res = await fetch("/api/health");
@@ -38,6 +37,7 @@ async function checkDbHealth() {
   }
 }
 
+// ---- HELPERS ----
 function ensureArrayMaybeLines(val) {
   if (Array.isArray(val)) return val;
   if (!val) return [];
@@ -47,7 +47,7 @@ function ensureArrayMaybeLines(val) {
     .filter(Boolean);
 }
 
-// Load recipes from server
+// ---- LOAD & RENDER RECIPES ----
 async function loadRecipes() {
   recipesContainer.innerHTML = '<p class="helper">Loading recipes…</p>';
 
@@ -55,7 +55,6 @@ async function loadRecipes() {
     const res = await fetch("/api/recipes");
     if (!res.ok) throw new Error("Failed to fetch recipes");
     const recipes = await res.json();
-    currentRecipes = recipes;
 
     if (!recipes.length) {
       recipesContainer.innerHTML =
@@ -96,7 +95,7 @@ function renderRecipe(recipe) {
   item.appendChild(meta);
   item.appendChild(desc);
 
-  // CATEGORY BADGE (optional, if you want to show it)
+  // CATEGORY badge
   if (recipe.category) {
     const badge = document.createElement("span");
     badge.className = "badge-pill";
@@ -140,7 +139,7 @@ function renderRecipe(recipe) {
     item.appendChild(ol);
   }
 
-  // COMMENTS SECTION
+  // COMMENTS SECTION (display only)
   const commentsTitle = document.createElement("div");
   commentsTitle.className = "recipe-section-title";
   commentsTitle.textContent = "Comments";
@@ -243,7 +242,7 @@ function renderRecipe(recipe) {
   deleteBtn.style.fontSize = "11px";
   deleteBtn.style.padding = "6px 10px";
   deleteBtn.style.borderRadius = "999px";
-  deleteBtn.style.border = "1px solid rgba(220, 38, 38, 0.7)";
+  deleteBtn.style.border = "1px solid rgba(220,38,38,0.7)";
   deleteBtn.style.background = "#fee2e2";
   deleteBtn.style.color = "#991b1b";
   deleteBtn.style.cursor = "pointer";
@@ -278,6 +277,7 @@ function renderRecipe(recipe) {
 
 function startEditMode(recipe) {
   editingId = recipe._id;
+  console.log("Editing recipe id:", editingId);
 
   form.title.value = recipe.title || "";
   form.category.value = recipe.category || "Uncategorized";
@@ -289,7 +289,7 @@ function startEditMode(recipe) {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// Handle form submission (create OR update)
+// ---- FORM SUBMIT: CREATE or UPDATE ----
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -304,6 +304,8 @@ form.addEventListener("submit", async (e) => {
 
   const url = editingId ? `/api/recipes/${editingId}` : "/api/recipes";
   const method = editingId ? "PUT" : "POST";
+
+  console.log("Submitting", method, url, "with id:", editingId);
 
   try {
     const res = await fetch(url, {
@@ -330,6 +332,6 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// Run on page load
+// ---- INIT ----
 checkDbHealth();
 loadRecipes();
